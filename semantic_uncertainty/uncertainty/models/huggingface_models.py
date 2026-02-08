@@ -119,10 +119,14 @@ class HuggingfaceModel(BaseModel):
             llama65b = '65b' in model_name.lower() and base == 'huggyllama'
             llama2or3_70b = '70b' in model_name.lower() and base == 'meta-llama'
 
-            if ('7b' in model_name or '13b' in model_name) or eightbit:
+            if ('7b' in model_name.lower() or '13b' in model_name.lower() or '8b' in model_name.lower()) or eightbit:
                 self.model = AutoModelForCausalLM.from_pretrained(
-                    f"{base}/{model_name}", device_map="auto",
-                    max_memory={0: '80GIB'}, **kwargs,)
+                    f"{base}/{model_name}", 
+                    device_map="auto",
+                    torch_dtype=torch.float16,   # <--- Fix 1: Force FP16
+                    max_memory={0: '22GiB'},     # <--- Fix 2: Set realistic limit for 24GB card
+                    **kwargs,
+                )
 
             elif llama2or3_70b or llama65b:
                 path = snapshot_download(
@@ -266,20 +270,22 @@ class HuggingfaceModel(BaseModel):
                 'Generation exceeding token limit %d > %d',
                 len(outputs.sequences[0]), self.token_limit)
 
-        full_answer = self.tokenizer.decode(
-            outputs.sequences[0], skip_special_tokens=True)
+        # --- FIXED: Robust Token Slicing ---
+        # 1. Identify where the prompt ends in the token sequence
+        input_token_len = inputs['input_ids'].shape[1]
+        
+        # 2. Extract just the generated tokens
+        generated_tokens = outputs.sequences[0][input_token_len:]
+        answer = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+        
+        # 3. Reconstruct 'full_answer' and 'offset' for compatibility with legacy code below
+        # We decode the prompt part of the output to see how long it is as a string
+        prompt_part_decoded = self.tokenizer.decode(outputs.sequences[0][:input_token_len], skip_special_tokens=True)
+        full_answer = prompt_part_decoded + answer
+        input_data_offset = len(prompt_part_decoded)
 
         if return_full:
             return full_answer
-
-        # For some models, we need to remove the input_data from the answer.
-        if full_answer.startswith(input_data):
-            input_data_offset = len(input_data)
-        else:
-            raise ValueError('Have not tested this in a while.')
-
-        # Remove input from answer.
-        answer = full_answer[input_data_offset:]
 
         # Remove stop_words from answer.
         stop_at = len(answer)
