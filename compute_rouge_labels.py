@@ -49,7 +49,7 @@ def main():
         if avg_rouge > 0.7:
             label = 0 # Confident (Low Entropy)
             stats["confident"] += 1
-        elif avg_rouge < 0.3:
+        elif avg_rouge < 0.5:
             label = 1 # Hallucinated (High Entropy)
             stats["hallucinated"] += 1
         else:
