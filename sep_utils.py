@@ -3,6 +3,33 @@ Shared utilities for SEP pipeline (Llama-3 Edition).
 """
 import logging
 
+
+def format_prompt(tokenizer, document):
+    """
+    Formats a prompt using the tokenizer's chat template.
+    IMPORTANT:
+    - Must be used consistently for both generation and feature extraction.
+    Args:
+        tokenizer: HuggingFace tokenizer with chat template
+        document: input article string
+    
+    Returns:
+        formatted prompt string
+    """
+    
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant that summarizes articles."},
+        {"role": "user", "content": f"Summarize the following article in one sentence:\n\n{document}"}
+    ]
+    
+    formatted = tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True  # ensures assistant turn is appended
+    )
+    
+    return formatted
+
 def format_llama3_prompt(document):
     """
     Standard Llama-3-Instruct wrapper.

@@ -8,13 +8,13 @@ import os
 sys.path.append(os.path.abspath("semantic_uncertainty"))
 
 # Reuse OATML model wrapper for loading, but we will access the raw model inside it
-from uncertainty.models.huggingface_models import HuggingfaceModel
-from sep_utils import format_llama3_prompt, setup_simple_logger
+from semantic_uncertainty.uncertainty.models.huggingface_models import HuggingfaceModel
+from sep_utils import format_prompt, setup_simple_logger
+from common_utils import MODEL_NAME
 
 
 INPUT_LABEL_FILE = "sep_filtered_labels.json"
 OUTPUT_TENSOR_FILE = "sep_dataset.pt"
-MODEL_NAME = "Meta-Llama-3-8B-Instruct"
 
 def get_last_token_hidden_state(model_instance, input_ids, attention_mask):
     """
@@ -70,7 +70,7 @@ def main():
     for item in tqdm(dataset):
         # CRITICAL: Re-construct prompt exactly as before
         document = item['document']
-        prompt_text = format_llama3_prompt(document)
+        prompt_text = format_prompt(wrapper.tokenizer, document)
         
         # Tokenize
         inputs = wrapper.tokenizer(prompt_text, return_tensors="pt").to("cuda")
