@@ -6,13 +6,14 @@ import sys
 from tqdm import tqdm
 
 sys.path.append(os.path.abspath("semantic_uncertainty"))
-from uncertainty.models.huggingface_models import HuggingfaceModel
-from sep_utils import format_llama3_prompt, setup_simple_logger
+
+from semantic_uncertainty.uncertainty.models.huggingface_models import HuggingfaceModel
+from sep_utils import format_prompt, setup_simple_logger
+from common_utils import MODEL_NAME
 
 # INPUT: Uses your new BALANCED NLI labels
 INPUT_LABEL_FILE = "sep_nli_labels.json" 
 OUTPUT_TENSOR_FILE = "sep_contrastive_data.pt"
-MODEL_NAME = "Meta-Llama-3-8B-Instruct"
 
 def get_contrastive_states(model_instance, prompt_text, full_text):
     """
@@ -23,13 +24,14 @@ def get_contrastive_states(model_instance, prompt_text, full_text):
     hf_model = model_instance.model 
     tokenizer = model_instance.tokenizer
     
-    # 1. Tokenize Full Text to get full sequence length
-    inputs = tokenizer(full_text, return_tensors="pt").to("cuda")
-    input_ids = inputs.input_ids
-    
-    # 2. Find the index of the last prompt token
-    prompt_tokens = tokenizer(prompt_text, return_tensors="pt").to("cuda")
-    prompt_len = prompt_tokens.input_ids.shape[1]
+    # Tokenize prompt separately (without generation)
+    prompt_inputs = tokenizer(prompt_text, return_tensors="pt").to("cuda")
+    prompt_len = prompt_inputs.input_ids.shape[1]
+
+    # Tokenize full text
+    full_inputs = tokenizer(full_text, return_tensors="pt").to("cuda")
+    input_ids = full_inputs.input_ids
+
     
     # Last token of prompt is at index `prompt_len - 1`
     # Last token of generation is at index `-1`
@@ -80,11 +82,12 @@ def main():
     
     logging.info(f"Extracting contrastive features for {len(dataset)} samples...")
     for item in tqdm(dataset):
-        prompt_text = format_llama3_prompt(item['document'])
+        prompt_text = format_prompt(wrapper.tokenizer, item['document'])
         
         # We re-generate 1 sample to get the 'end' state corresponding to the prompt.
         # (Ideally we reuse the text, but this ensures state alignment).
         gen_text, _, _ = wrapper.predict(prompt_text, temperature=0.7)
+        gen_text = gen_text.strip()
         full_text = prompt_text + gen_text
         
         h_p, h_g = get_contrastive_states(wrapper, prompt_text, full_text)

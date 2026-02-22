@@ -11,16 +11,12 @@ import sys
 sys.path.append(os.path.abspath("semantic_uncertainty"))
 
 # Reuse OATML model wrapper
-from uncertainty.models.huggingface_models import HuggingfaceModel
-from sep_utils import format_llama3_prompt, setup_simple_logger
+from semantic_uncertainty.uncertainty.models.huggingface_models import HuggingfaceModel
+from sep_utils import format_prompt, setup_simple_logger
+from common_utils import MODEL_NAME, NUM_SAMPLES_XSUM, NUM_GENERATIONS_XSUM, TEMPERATURE, SEED
 
 # Configuration
 # Update this line
-MODEL_NAME = "Meta-Llama-3-8B-Instruct"
-NUM_SAMPLES = 1000
-NUM_GENERATIONS = 5
-TEMPERATURE = 0.7
-SEED = 42
 OUTPUT_FILE = "sep_xsum_generations.pkl"
 
 def main():
@@ -36,7 +32,7 @@ def main():
     dataset = load_dataset("xsum", split="train")
     
     # Sample indices
-    indices = random.sample(range(len(dataset)), NUM_SAMPLES)
+    indices = random.sample(range(len(dataset)), NUM_SAMPLES_XSUM)
     logging.info(f"Sampled {len(indices)} indices.")
 
     # 3. Initialize Model (Reusing OATML Class)
@@ -54,15 +50,15 @@ def main():
 
     # 4. Generation Loop
     logging.info("Starting generation...")
-    for i, idx in tqdm(enumerate(indices), total=NUM_SAMPLES):
+    for i, idx in tqdm(enumerate(indices), total=NUM_SAMPLES_XSUM):
         document = dataset[idx]['document']
         
         # CRITICAL: Apply shared formatting
-        prompt_text = format_llama3_prompt(document)
+        prompt_text = format_prompt(model.tokenizer, document)
         
         # Wrapper for multiple generations
         generations = []
-        for gen_i in range(NUM_GENERATIONS):
+        for gen_i in range(NUM_GENERATIONS_XSUM):
             # OATML `predict` returns: (answer, log_likelihoods, hidden_states)
             # We strictly reuse their predict method.
             try:

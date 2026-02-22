@@ -6,12 +6,12 @@ import sys
 from tqdm import tqdm
 
 sys.path.append(os.path.abspath("semantic_uncertainty"))
-from uncertainty.models.huggingface_models import HuggingfaceModel
-from sep_utils import format_llama3_prompt, setup_simple_logger
+from semantic_uncertainty.uncertainty.models.huggingface_models import HuggingfaceModel
+from sep_utils import format_prompt, setup_simple_logger
+from common_utils import MODEL_NAME
 
 INPUT_LABEL_FILE = "sep_nli_labels.json"
 OUTPUT_TENSOR_FILE = "sep_all_layers.pt"
-MODEL_NAME = "Meta-Llama-3-8B-Instruct"
 
 def get_all_layers_hidden_states(model_instance, input_ids, attention_mask):
     """Extract hidden states from ALL layers for the last token of the prompt."""
@@ -56,7 +56,7 @@ def main():
     
     logging.info(f"Extracting all layers for {len(dataset)} samples...")
     for item in tqdm(dataset):
-        prompt_text = format_llama3_prompt(item['document'])
+        prompt_text = format_prompt(wrapper.tokenizer, item['document'])
         inputs = wrapper.tokenizer(prompt_text, return_tensors="pt").to("cuda")
         
         # Shape: (33, 4096)

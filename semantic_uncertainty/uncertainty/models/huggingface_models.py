@@ -115,6 +115,9 @@ class HuggingfaceModel(BaseModel):
             self.tokenizer = AutoTokenizer.from_pretrained(
                 f"{base}/{model_name}", device_map="auto",
                 token_type_ids=None)
+            
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
 
             llama65b = '65b' in model_name.lower() and base == 'huggyllama'
             llama2or3_70b = '70b' in model_name.lower() and base == 'meta-llama'
@@ -228,13 +231,17 @@ class HuggingfaceModel(BaseModel):
         self.token_limit = 4096 if 'Llama-2' in model_name else 2048
 
     
-    def predict(self, input_data, temperature, return_full=False, return_latent=False):
+    def predict(self, input_data, temperature, return_full=False, return_latent=False, formatted=True):
+
+        if not formatted:
+            input_data = self.tokenizer.apply_chat_template(...)
+
 
         if isinstance(input_data, tuple):
             logging.WARNING("INPUT IS A TUPLE.")
             input_data = input_data[0]
 
-        inputs = self.tokenizer(input_data, return_tensors="pt").to("cuda")
+        inputs = self.tokenizer(input_data, return_tensors="pt", add_special_tokens=False)
 
         if 'llama' in self.model_name.lower() or 'falcon' in self.model_name or 'mistral' in self.model_name.lower():
             if 'token_type_ids' in inputs:  # HF models seems has changed.

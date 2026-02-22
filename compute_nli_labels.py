@@ -6,11 +6,10 @@ import logging
 import os
 from tqdm import tqdm
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
-
+from common_utils import NLI_MODEL
 # Config
 INPUT_FILE = "sep_xsum_generations.pkl"
 OUTPUT_FILE = "sep_nli_labels.json"
-NLI_MODEL = "microsoft/deberta-large-mnli"
 
 def setup_logger():
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
