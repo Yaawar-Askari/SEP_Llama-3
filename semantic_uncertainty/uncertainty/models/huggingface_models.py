@@ -241,7 +241,7 @@ class HuggingfaceModel(BaseModel):
             logging.WARNING("INPUT IS A TUPLE.")
             input_data = input_data[0]
 
-        inputs = self.tokenizer(input_data, return_tensors="pt", add_special_tokens=False)
+        inputs = self.tokenizer(input_data, return_tensors="pt", add_special_tokens=False).to("cuda")
 
         if 'llama' in self.model_name.lower() or 'falcon' in self.model_name or 'mistral' in self.model_name.lower():
             if 'token_type_ids' in inputs:  # HF models seems has changed.
