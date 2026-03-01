@@ -53,7 +53,7 @@ done
 # ---- Stage 3: Feature Extraction ----
 echo "=== STAGE 3: Feature Extraction ==="
 for ds in "${DATASETS[@]}"; do
-    echo "[$(date)] Extracting features for $ds..."
+    echo "[$(date)] Extracting hidden-state features for $ds..."
     $PYTHON extract_all_layers.py --dataset "$ds" 2>&1 | tee "$LOG_DIR/extract_${ds}.log"
     echo "[$(date)] Finished extraction for $ds."
 done
@@ -62,15 +62,48 @@ done
 echo ""
 echo "=== STAGE 4: In-Distribution Evaluation ==="
 for ds in "${DATASETS[@]}"; do
-    echo "[$(date)] Training ID probe for $ds..."
-    $PYTHON train_probe.py --mode id --dataset "$ds" 2>&1 | tee "$LOG_DIR/probe_id_${ds}.log"
+    echo "[$(date)] Training hidden-state ID probe for $ds..."
+    $PYTHON train_probe.py --mode id --dataset "$ds" --save_probe 2>&1 | tee "$LOG_DIR/probe_id_${ds}.log"
     echo ""
 done
 
 # ---- Stage 5: Cross-Dataset OOD Matrix ----
 echo "=== STAGE 5: Cross-Dataset AUROC Matrix ==="
-echo "[$(date)] Computing cross-dataset AUROC matrix..."
+echo "[$(date)] Hidden-state matrix..."
 $PYTHON train_probe.py --mode matrix 2>&1 | tee "$LOG_DIR/probe_matrix.log"
+
+
+# ---- Stage 6: SEP-Triggered Lookback Gated Inference ----
+echo ""
+echo "=== STAGE 6: Gated Inference (SEP + Lookback Ratio) ==="
+ALPHA=${ALPHA:-10.0}
+SEP_THRESHOLD=${SEP_THRESHOLD:-0.5}
+TOKEN_TYPE=${TOKEN_TYPE:-TBG}
+for ds in "${DATASETS[@]}"; do
+    echo "[$(date)] Running gated inference for $ds  (alpha=$ALPHA, threshold=$SEP_THRESHOLD, token=$TOKEN_TYPE)..."
+    $PYTHON inference_with_gate.py \
+        --dataset "$ds" \
+        --alpha "$ALPHA" \
+        --sep_threshold "$SEP_THRESHOLD" \
+        --token_type "$TOKEN_TYPE" \
+        2>&1 | tee "$LOG_DIR/gated_inference_${ds}.log"
+    echo ""
+done
+
+# ---- Stage 7: Causal Validation ----
+echo ""
+echo "=== STAGE 7: Causal Validation (Knockout & Blindness Tests) ==="
+CAUSAL_SAMPLES=${CAUSAL_SAMPLES:-100}
+LR_CUTOFF=${LR_CUTOFF:-0.5}
+for ds in "${DATASETS[@]}"; do
+    echo "[$(date)] Running causal validation for $ds  (samples=$CAUSAL_SAMPLES, lr_cutoff=$LR_CUTOFF)..."
+    $PYTHON causal_validation.py \
+        --dataset "$ds" \
+        --num_samples "$CAUSAL_SAMPLES" \
+        --lr_cutoff "$LR_CUTOFF" \
+        2>&1 | tee "$LOG_DIR/causal_validation_${ds}.log"
+    echo ""
+done
 
 echo ""
 echo "=========================================="

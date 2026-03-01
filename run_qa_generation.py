@@ -188,7 +188,7 @@ def main():
         generations = []
         for gen_i in range(NUM_GENERATIONS_QA):
             try:
-                answer, _, _ = model.predict(local_prompt, temperature=TEMPERATURE_HIGH)
+                answer, _, _, _ = model.predict(local_prompt, temperature=TEMPERATURE_HIGH)
                 generations.append(answer)
             except Exception as e:
                 logging.error(f"Generation failed for sample {i}, gen {gen_i}: {e}")
@@ -199,7 +199,7 @@ def main():
         slt_embedding = None
         ml_answer = ""
         try:
-            ml_answer, _, hidden_states = model.predict(
+            ml_answer, _, hidden_states, _ = model.predict(
                 local_prompt, temperature=TEMPERATURE_LOW, return_latent=True
             )
             # hidden_states = (last_tok_emb, slt_all_layers, tbg_all_layers)
