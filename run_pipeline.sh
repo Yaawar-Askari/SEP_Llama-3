@@ -12,8 +12,9 @@
 #   bash run_pipeline.sh squad trivia_qa
 set -e
 
-PYTHON=/home/anish/miniconda3/envs/se_probes/bin/python
-WORKDIR=/home/anish/yaawar/LLM/semantic-entropy-probes
+PYTHON=/home/jay_agarwal_2022/miniforge3/envs/se_probes/bin/python
+WORKDIR=/home/jay_agarwal_2022/SEP_Llama-3
+export HF_HUB_CACHE=/data/scratch/jay_agarwal_2022/hf_cache
 cd "$WORKDIR"
 
 # If specific datasets passed as args, use those; otherwise use all 4 QA datasets
@@ -35,13 +36,17 @@ echo "Start time: $(date)"
 echo "=========================================="
 
 # ---- Stage 1: Generation ----
+# Generation is assumed to already be running in the background.
+# Wait for each dataset's generations.pkl to appear before proceeding.
 echo ""
-echo "=== STAGE 1: Generation ==="
+echo "=== STAGE 1: Waiting for generation to complete ==="
 for ds in "${DATASETS[@]}"; do
-    echo "[$(date)] Starting generation for $ds..."
-    $PYTHON run_qa_generation.py --dataset "$ds" 2>&1 | tee "$LOG_DIR/gen_${ds}.log"
-    echo "[$(date)] Finished generation for $ds."
-    echo ""
+    log_file="$LOG_DIR/gen_${ds}_rerun.log"
+    # Fall back to non-rerun log name if rerun log doesn't exist
+    [ -f "$log_file" ] || log_file="$LOG_DIR/gen_${ds}.log"
+    echo "[$(date)] Waiting for generation to finish for $ds (watching $log_file)..."
+    until grep -q "Finished\. Saved" "$log_file" 2>/dev/null; do sleep 60; done
+    echo "[$(date)] Generation complete for $ds."
 done
 
 # ---- Stage 2: NLI Labels ----

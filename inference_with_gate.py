@@ -111,6 +111,7 @@ class LookbackGatedAttention:
         self.alpha          = alpha
         self.lr_cutoff      = lr_cutoff
         self.gate_mode      = gate_mode
+        self.sep_score      = 1.0   # set per-sample before trigger(); scales gate intensity
         self._patched       = []   # list of (attn_mod, original_bound_method)
 
         layers = model.model.layers
@@ -127,7 +128,8 @@ class LookbackGatedAttention:
         logging.info(
             f"LookbackGatedAttention: patched {len(self._patched)} layers "
             f"({list(layer_range)[0]}–{list(layer_range)[-1]}), "
-            f"mode={gate_mode}, alpha={alpha}, lr_cutoff={lr_cutoff}"
+            f"mode={gate_mode}, alpha={alpha}, lr_cutoff={lr_cutoff}, "
+            f"lr=avg-normalized, sep_modulated=True"
         )
 
     # ---- Patched forward factory ----------------------------------- #
@@ -223,18 +225,32 @@ class LookbackGatedAttention:
             attn_output = torch.matmul(attn_weights, value_states)
             # attn_output: (B=1, num_heads, q_len=1, head_dim)
 
-            # ===== FIX 1 + FIX 2: gate here, BEFORE o_proj ===== #
+            # ===== FIX 1 + FIX 2 + FIX 3: gate here, BEFORE o_proj ===== #
             ctx       = controller.context_length
             attn_row  = attn_weights[0, :, -1, :]           # (H, kv_len)
-            attn_ctx  = attn_row[:, :ctx].sum(-1)            # (H,) prompt attn
-            attn_new  = attn_row[:, ctx:].sum(-1)            # (H,) generated attn
+            kv_len    = attn_row.shape[-1]
+            gen_len   = max(kv_len - ctx, 1)
+            # FIX 3 — Normalize by token count (GAME-style average LR).
+            # Sum-based LR is trivially high on long prompts (e.g. XSum 500+
+            # tokens) because softmax mass pools on the large prompt prefix,
+            # making the gate near-inactive.  Per-token averages give the same
+            # semantics as Lookback Lens / GAME: how much does each context
+            # token receive vs each generated token.
+            attn_ctx  = attn_row[:, :ctx].sum(-1) / ctx      # (H,) avg per prompt token
+            attn_new  = attn_row[:, ctx:].sum(-1) / gen_len  # (H,) avg per generated token
             lr        = attn_ctx / (attn_ctx + attn_new + 1e-10)   # (H,) ∈ [0,1]
 
             mode   = controller.gate_mode
             cutoff = controller.lr_cutoff
-
             if mode == 'soft':
-                gate = torch.sigmoid((lr - cutoff) * controller.alpha)
+                # SEP-modulated gating: probe score continuously scales how much
+                # suppression is applied, blending between no-op (gate=1) and the
+                # full sigmoid gate.  sep_score=1 → full gate; sep_score≈threshold
+                # → near pass-through.  Different from HAVE: we use the
+                # pre-generation probe score (trained on semantic uncertainty across
+                # 10 generations), not the model's own logit entropy at decode time.
+                gate_shape = torch.sigmoid((lr - cutoff) * controller.alpha)
+                gate = controller.sep_score * gate_shape + (1.0 - controller.sep_score)
             elif mode == 'hard':
                 gate = (lr >= cutoff).float()
             elif mode == 'zero_all':
@@ -278,6 +294,7 @@ class LookbackGatedAttention:
     def reset(self):
         """Deactivate gating (passthrough mode)."""
         self.triggered = False
+        self.sep_score = 1.0
 
     def remove(self):
         """Restore all original forward methods (call once after inference)."""
@@ -568,6 +585,7 @@ def main():
             )])
 
             controller.context_length = n_prompt_tokens
+            controller.sep_score      = float(score)
             controller.trigger()
 
             try:

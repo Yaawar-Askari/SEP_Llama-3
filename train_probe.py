@@ -21,7 +21,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, roc_auc_score, classification_report
 import logging
 
-from common_utils import QA_DATASETS, OUTPUT_BASE, MODEL_NAME, NLI_MODEL
+from common_utils import QA_DATASETS, ALL_DATASETS, OUTPUT_BASE, MODEL_NAME, NLI_MODEL
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -415,10 +415,10 @@ def main_ood(train_dataset, eval_dataset):
 # ============================================================
 
 def main_matrix():
-    """Run all 4x4 train/eval combinations and print AUROC matrix."""
+    """Run all NxN train/eval combinations and print AUROC matrix."""
     # Check which datasets have data
     available = []
-    for ds in QA_DATASETS:
+    for ds in ALL_DATASETS:
         data_file = os.path.join(OUTPUT_BASE, ds, "all_layers.pt")
         if os.path.exists(data_file):
             available.append(ds)
@@ -593,9 +593,9 @@ def main_lookback_ood(train_dataset, eval_dataset):
 
 
 def main_lookback_matrix():
-    """Full 4×4 cross-dataset AUROC matrix using Lookback Ratio features."""
+    """Full NxN cross-dataset AUROC matrix using Lookback Ratio features."""
     available = []
-    for ds in QA_DATASETS:
+    for ds in ALL_DATASETS:
         data_file = os.path.join(OUTPUT_BASE, ds, "lookback_features.pt")
         if os.path.exists(data_file):
             available.append(ds)
